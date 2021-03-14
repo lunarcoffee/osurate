@@ -1,8 +1,8 @@
+use std::{panic, result, thread};
 use std::io::{Read, Write};
-use std::panic;
 
 use lame::Lame;
-use minimp3::{Decoder, Error};
+use minimp3::Decoder;
 use rubato::{InterpolationParameters, InterpolationType, Resampler, SincFixedIn, WindowFunction};
 
 #[derive(Clone, Copy, Debug)]
@@ -15,8 +15,16 @@ pub enum AudioStretchError {
     DestinationIoError,
 }
 
+impl From<lame::Error> for AudioStretchError {
+    fn from(_: lame::Error) -> Self {
+        Self::LameInitializationError
+    }
+}
+
+type Result<T> = result::Result<T, AudioStretchError>;
+
 // Stretches MP3 audio read from `src` by a factor of `rate`, writing the output to `dest` as MP3 audio.
-pub fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<(), AudioStretchError> {
+pub fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<()> {
     // Decode source MP3 data into raw PCM data.
     let mut decoder = Decoder::new(src);
     let mut frames = vec![];
@@ -24,18 +32,14 @@ pub fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<(), A
         frames.push(frame);
     }
     match decoder.next_frame() {
-        Err(Error::Eof) | Err(Error::SkippedData) => {}
+        Err(minimp3::Error::Eof) | Err(minimp3::Error::SkippedData) => {}
         _ => return Err(AudioStretchError::InvalidSource),
     }
 
     let channels = frames[0].channels;
+    (channels <= 2).then(|| {}).ok_or(AudioStretchError::UnsupportedChannelCount)?;
     let sample_rate = frames[0].sample_rate;
     let bitrate = frames[0].bitrate;
-
-    // This LAME binding only supports 2 channels.
-    if channels > 2 {
-        return Err(AudioStretchError::UnsupportedChannelCount);
-    }
 
     // Gather samples and convert them to f32 PCM.
     let i16_to_f32 = |n| n as f32 / i16::MAX as f32;
@@ -46,14 +50,14 @@ pub fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<(), A
         1 => (samples.clone(), samples),
         _ => samples.as_chunks::<2>().0.iter().map(|&[l, r]| (l, r)).unzip(),
     };
-    let (samples_l, samples_r) = resample_f32_to_i16([samples_lr.0, samples_lr.1], rate)?;
+    let concurrency = thread::available_concurrency().map(|n| n.get()).unwrap_or(2);
+    let (samples_l, samples_r) = resample_parallel(samples_lr, rate, concurrency)?;
 
-    let lame_err = AudioStretchError::LameInitializationError;
-    let mut lame = Lame::new().ok_or(lame_err)?;
-    lame.init_params().or(Err(lame_err))?;
-    lame.set_sample_rate(sample_rate as u32).or(Err(lame_err))?;
-    lame.set_quality(5).or(Err(lame_err))?;
-    lame.set_kilobitrate(bitrate).or(Err(lame_err))?;
+    let mut lame = Lame::new().ok_or(AudioStretchError::LameInitializationError)?;
+    lame.init_params()?;
+    lame.set_sample_rate(sample_rate as u32)?;
+    lame.set_quality(6)?;
+    lame.set_kilobitrate(bitrate)?;
 
     // Encode the stretched PCM data to MP3, writing it to `dest`.
     let mut buf = vec![0; samples_l.len()];
@@ -61,8 +65,28 @@ pub fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<(), A
     dest.write_all(&buf[..written]).or(Err(AudioStretchError::DestinationIoError))
 }
 
-// Resamples dual channel f32 PCM `samples` by a factor of `rate`, returning them as i16 PCM data.
-fn resample_f32_to_i16(samples: [Vec<f32>; 2], rate: f64) -> Result<(Vec<i16>, Vec<i16>), AudioStretchError> {
+// Resamples dual channel f32 PCM `samples` by a factor of `rate` in parallel with `threads` worker threads, returning
+// the new samples as i16 PCM data.
+fn resample_parallel(samples: (Vec<f32>, Vec<f32>), rate: f64, n_threads: usize) -> Result<(Vec<i16>, Vec<i16>)> {
+    // Split the samples into equally sized chunks based on the number of worker threads.
+    let sample_pairs = samples.0.into_iter().zip(samples.1).collect::<Vec<_>>();
+    let sample_chunks = sample_pairs.chunks(sample_pairs.len() / n_threads);
+
+    let mut handles = vec![];
+    for sample_chunk in sample_chunks {
+        // Spawn a thread to process each chunk.
+        let (chunk_l, chunk_r) = sample_chunk.iter().map(|p| *p).unzip();
+        handles.push(thread::spawn(move || resample_f32_to_i16([chunk_l, chunk_r], rate)));
+    }
+
+    // Recombine the resampled chunks.
+    let resampled_chunks = handles.into_iter().map(|h| h.join().unwrap()).collect::<Result<Vec<_>>>()?;
+    Ok(resampled_chunks.into_iter().flatten().unzip())
+}
+
+// Helper function to resample a chunk of PCM samples.
+fn resample_f32_to_i16(samples: [Vec<f32>; 2], rate: f64) -> Result<Vec<(i16, i16)>> {
+    // These are optimized heavily for speed over quality.
     let params = InterpolationParameters {
         sinc_len: 64,
         f_cutoff: 0.95,
@@ -75,15 +99,14 @@ fn resample_f32_to_i16(samples: [Vec<f32>; 2], rate: f64) -> Result<(Vec<i16>, V
     let prev_hook = panic::take_hook();
     panic::set_hook(box |_| {});
 
-    let resampled_frames = panic::catch_unwind(|| {
+    let resampled = panic::catch_unwind(|| {
         let mut resampler = SincFixedIn::<f32>::new(1.0 / rate, params, samples[0].len(), 2);
         resampler.process(&samples).or(Err(AudioStretchError::ResampleError))
     }).map_err(|_| AudioStretchError::ResampleError)??;
 
     panic::set_hook(prev_hook);
 
+    // Convert resampled data to i16 PCM.
     let f32_to_i16 = |n| (n * i16::MAX as f32) as i16;
-    let frames_l = resampled_frames[0].iter().map(f32_to_i16).collect();
-    let frames_r = resampled_frames[1].iter().map(f32_to_i16).collect();
-    Ok((frames_l, frames_r))
+    Ok(resampled[0].iter().zip(&resampled[1]).map(|(l, r)| (f32_to_i16(l), f32_to_i16(r))).collect())
 }
