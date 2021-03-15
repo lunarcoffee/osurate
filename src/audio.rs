@@ -12,6 +12,7 @@ use crate::util;
 
 #[derive(Debug)]
 pub enum AudioStretchError {
+    SourceNotFound,
     InvalidSource,
     UnsupportedChannelCount,
     ResampleError,
@@ -29,20 +30,21 @@ impl From<lame::Error> for AudioStretchError {
 type Result<T> = result::Result<T, AudioStretchError>;
 
 // Stretches the audio associated with the given `map` by a factor of `rate`, updating metadata.
-pub fn stretch_beatmap_audio(map: &mut Beatmap, rate: f64) -> Result<()> {
-    let old_path = Path::new(&map.general_info.audio_file);
-    let old_audio = File::open(&old_path).or(Err(AudioStretchError::InvalidSource))?;
+pub fn stretch_beatmap_audio(map: &mut Beatmap, dir: &Path, rate: f64) -> Result<()> {
+    let old_path = dir.join(&map.general_info.audio_file);
+    let old_audio = File::open(&old_path).or(Err(AudioStretchError::SourceNotFound))?;
 
-    let new_filename = format!(
+    let new_path = dir.join(format!(
         "{}_{}.{}",
         old_path.file_stem().ok_or(AudioStretchError::InvalidSource)?.to_string_lossy(),
         rate.to_string().replace('.', "_"),
         old_path.extension().ok_or(AudioStretchError::InvalidSource)?.to_string_lossy(),
-    );
-    let mut new_audio = File::create(&new_filename).or(Err(AudioStretchError::DestinationIoError))?;
+    ));
+    let mut new_audio = File::create(&new_path).or(Err(AudioStretchError::DestinationIoError))?;
     stretch(old_audio, &mut new_audio, rate)?;
 
-    map.general_info.audio_file = new_filename;
+    // This should be fine, since the file name was created just above.
+    map.general_info.audio_file = new_path.file_name().unwrap().to_str().unwrap().to_string();
     Ok(())
 }
 
