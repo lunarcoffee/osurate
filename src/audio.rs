@@ -1,6 +1,5 @@
 use std::{panic, result, thread};
 use std::io::{Read, Write};
-use std::time::Instant;
 
 use lame::Lame;
 use minimp3::Decoder;

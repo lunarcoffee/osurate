@@ -1,9 +1,10 @@
 use std::{io, result};
-use std::error::Error;
-use std::io::{BufRead, Read};
+use std::io::BufRead;
+use std::iter;
+use std::option::NoneError;
 use std::str::FromStr;
 
-use crate::beatmap::{Beatmap, DifficultyInfo, EditorInfo, Events, GeneralInfo, Metadata, TimingPoint, TimingPoints};
+use crate::beatmap::{Beatmap, Colors, DifficultyInfo, EditorInfo, Events, GeneralInfo, HitObject, HitObjectParams, Metadata, TimingPoint};
 use crate::util;
 use crate::util::verify;
 
@@ -17,6 +18,12 @@ pub enum ParseError {
 impl From<io::Error> for ParseError {
     fn from(_: io::Error) -> Self {
         ParseError::IoError
+    }
+}
+
+impl From<NoneError> for ParseError {
+    fn from(_: NoneError) -> Self {
+        ParseError::InvalidBeatmap
     }
 }
 
@@ -48,21 +55,30 @@ impl<R: BufRead> Parser<R> {
 
         verify_ff(next_section_header == "[Difficulty]")?;
         let (rest, next_section_header) = self.read_section()?;
-        let difficulty_info = DifficultyInfo(rest);
+        let difficulty = DifficultyInfo(rest);
 
         verify_ff(next_section_header == "[Events]")?;
         let (rest, next_section_header) = self.read_section()?;
         let events = Events(rest);
 
         verify_ff(next_section_header == "[TimingPoints]")?;
+        let (timing_points, mut next_section_header) = self.parse_timing_points()?;
 
+        // This section appears to be optional.
+        let colors = if next_section_header == "[Colours]" {
+            let (rest, next) = self.read_section()?;
+            next_section_header = next;
+            Some(Colors(rest))
+        } else {
+            None
+        };
 
-        println!("{:?}\n{:?}\n{:?}\n{:?}\n{:?}", general_info, editor_info, metadata, difficulty_info, events);
+        verify_ff(next_section_header == "[HitObjects]")?;
+        let hit_objects = self.parse_hit_objects()?;
 
-        Err(ParseError::IoError)
+        Ok(Beatmap { general_info, editor_info, metadata, difficulty, events, timing_points, colors, hit_objects })
     }
 
-    // Parse the necessary parts of the general info section.
     fn parse_general_info(&mut self) -> Result<(GeneralInfo, String)> {
         let mut audio_file = String::new();
         let mut audio_lead_in = 0;
@@ -71,12 +87,12 @@ impl<R: BufRead> Parser<R> {
 
         let mut line = self.read_line()?;
         while !is_section_header_or_eof(&line) {
-            let (key, value) = line.split_once(":").ok_or(ParseError::InvalidBeatmap)?;
+            let (key, value) = line.split_once(":")?;
             let value = value[1..].to_string(); // Trim off mandatory space.
             match key {
                 "AudioFilename" => audio_file = value,
-                "AudioLeadIn" => audio_lead_in = value.parse().or(Err(ParseError::InvalidBeatmap))?,
-                "PreviewTime" => preview_time = value.parse().or(Err(ParseError::InvalidBeatmap))?,
+                "AudioLeadIn" => audio_lead_in = parse_ff(&value)?,
+                "PreviewTime" => preview_time = parse_ff(&value)?,
                 _ => rest += &(line + "\n"),
             }
             line = self.read_line()?;
@@ -87,14 +103,13 @@ impl<R: BufRead> Parser<R> {
         Ok((GeneralInfo { audio_file, audio_lead_in, preview_time, rest }, line))
     }
 
-    // Parse the necessary parts of the metadata section.
     fn parse_metadata(&mut self) -> Result<(Metadata, String)> {
         let mut diff_name = String::new();
         let mut rest = String::new();
 
         let mut line = self.read_line()?;
         while !is_section_header_or_eof(&line) {
-            let (key, value) = line.split_once(":").ok_or(ParseError::InvalidBeatmap)?;
+            let (key, value) = line.split_once(":")?;
             match key {
                 "Version" => diff_name = value.to_string(),
                 _ => rest += &(line + "\n"),
@@ -107,8 +122,54 @@ impl<R: BufRead> Parser<R> {
         Ok((Metadata { diff_name, rest }, line))
     }
 
-    fn parse_timing_points(self) -> Result<(TimingPoints, String)> {
-        Ok((TimingPoints(vec![]), "".to_string()))
+    fn parse_timing_points(&mut self) -> Result<(Vec<TimingPoint>, String)> {
+        let mut timing_points = vec![];
+
+        let mut line = self.read_line()?;
+        while !is_section_header_or_eof(&line) {
+            let split = line.splitn(3, ',').collect::<Vec<_>>();
+            verify_ff(split.len() == 3)?;
+
+            let time = parse_ff(split[0])?;
+            let beat_len = parse_ff(split[1])?;
+            timing_points.push(TimingPoint { time, beat_len, rest: split[2].to_string() });
+            line = self.read_line()?;
+        }
+        Ok((timing_points, line))
+    }
+
+    fn parse_hit_objects(&mut self) -> Result<Vec<HitObject>> {
+        let mut hit_objects = vec![];
+
+        let mut line = self.read_line()?;
+        while !is_section_header_or_eof(&line) {
+            let mut split = line.split(',');
+            let mut rest_parts = vec![]; // See `beatmap/mod.rs`.
+
+            rest_parts.push(format!("{},{}", split.next()?, split.next()?));
+            let time = parse_ff(split.next()?)?;
+            let kind = parse_ff::<i32>(split.next()?)?;
+            rest_parts.push(format!("{},{}", kind, split.next()?));
+
+            let params = if kind & (1 << 0) == 1 || kind & (1 << 1) == 2 {
+                HitObjectParams::NoneUseful
+            } else if kind & (1 << 3) == 8 {
+                HitObjectParams::Spinner(parse_ff(split.next()?)?)
+            } else if kind & (1 << 7) == 128 {
+                let end_time = split.clone().next()?.split_once(':')?.0;
+                HitObjectParams::Slider(parse_ff(end_time)?)
+            } else {
+                return Err(ParseError::InvalidBeatmap);
+            };
+            rest_parts.push(split.collect::<Vec<_>>().join(","));
+
+            hit_objects.push(HitObject { time, params, rest_parts });
+            line = self.read_line()?;
+        }
+
+        // Verify that EOF has been reached.
+        verify_ff(line.is_empty())?;
+        Ok(hit_objects)
     }
 
     // Read an entire section to a string without any special parsing.
@@ -141,9 +202,14 @@ impl<R: BufRead> Parser<R> {
     }
 }
 
-// Convenient wrapper over `util::verify` specifically for verifying parts of the beatmap file format.
+// Convenience wrapper over `util::verify` specifically for verifying parts of a beatmap.
 fn verify_ff(cond: bool) -> Result<()> {
     verify(cond, ParseError::InvalidBeatmap)
+}
+
+// Convenience wrapper over `parse` specifically for values in a beatmap.
+fn parse_ff<F: FromStr>(str: &str) -> Result<F> {
+    str.parse().or(Err(ParseError::InvalidBeatmap))
 }
 
 // Checks if `line` is a section header (i.e. "[Metadata]") or was the result of reaching EOF.
