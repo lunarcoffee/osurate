@@ -191,7 +191,7 @@ impl<R: BufRead> Parser<R> {
             return Ok(buf);
         }
 
-        // Skip empty and comments.
+        // Skip empty lines and comments.
         if &buf[..] == "\n" || &buf[..] == "\r\n" || buf.starts_with("//") {
             self.read_line()
         } else {
@@ -205,7 +205,7 @@ fn verify_ff(cond: bool) -> Result<()> {
     verify(cond, ParseError::InvalidBeatmap)
 }
 
-// Convenience wrapper over `parse` specifically for values in a beatmap.
+// Convenience wrapper over `parse` specifically for parsing required values in a beatmap.
 fn parse_ff<F: FromStr>(str: &str) -> Result<F> {
     str.parse().or(Err(ParseError::InvalidBeatmap))
 }
