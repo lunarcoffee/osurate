@@ -31,6 +31,11 @@ fn main() {
     let rates = rate_matches.map(|r| r.parse::<f64>()).collect::<Result<Vec<_>, _>>()
         .unwrap_or_else(|_| util::log_fatal("invalid rate(s) specified"));
 
+    // TODO: fix; multiple resampling passes or parameter tuning maybe?
+    if rates.iter().any(|r| !(0.01..=1.5).contains(r)) {
+        util::log_fatal("rates above 1.5x are not supported yet");
+    }
+
     util::log_info("starting");
     map_paths.map(|p| Path::new(p)).for_each(|p| generate_rates(p, &rates));
     util::log_info("done");
