@@ -4,9 +4,11 @@ use std::time::Instant;
 
 use lame::Lame;
 use minimp3::Decoder;
-use rubato::{FftFixedIn, InterpolationParameters, InterpolationType, Resampler, SincFixedIn, WindowFunction};
+use rubato::{InterpolationParameters, InterpolationType, Resampler, SincFixedIn, WindowFunction};
 
-#[derive(Clone, Copy, Debug)]
+use crate::util;
+
+#[derive(Debug)]
 pub enum AudioStretchError {
     InvalidSource,
     UnsupportedChannelCount,
@@ -38,7 +40,7 @@ pub fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<()> {
     }
 
     let channels = frames[0].channels;
-    (channels <= 2).then(|| {}).ok_or(AudioStretchError::UnsupportedChannelCount)?;
+    util::verify(channels <= 2, AudioStretchError::UnsupportedChannelCount)?;
     let sample_rate = frames[0].sample_rate;
     let bitrate = frames[0].bitrate;
 
