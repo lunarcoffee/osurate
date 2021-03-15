@@ -6,7 +6,7 @@ osurate is a small command line tool written in [Rust](https://www.rust-lang.org
 TODO: gui
 
 ## Building
-To build, just clone [this repo](https://github.com/LunarCoffee/osurate) and compile with `cargo build --release`.
+Before building, make sure you have libmp3lame and nightly rustc (at least 1.50.0). To build, just clone [this repo](https://github.com/LunarCoffee/osurate) and compile with `cargo build --release`.
 
 ## Usage
 ```bash
