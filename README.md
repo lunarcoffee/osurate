@@ -21,4 +21,4 @@ osurate "MANIERA [Masterpiece]" "Crystallized [listen]" -r 1.1
 Specify the paths of the .osu files you want to generate rates for in `inputs`, and put the `rates` you want after.
 
 ## Performance
-With my i7-6700HQ on Ubuntu, it takes around 2-3 seconds to generate one rate for a 2 minute (~3 MB MP3) map, the bottleneck being the MP3 re-encoding with LAME.
+With my Intel i7-6700HQ on Ubuntu, it takes around 2-3 seconds to generate one rate for a 2 minute (~3 MB MP3) map, the bottleneck being the MP3 re-encoding with LAME.
