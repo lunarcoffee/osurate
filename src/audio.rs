@@ -1,10 +1,13 @@
 use std::{panic, result, thread};
+use std::fs::File;
 use std::io::{Read, Write};
+use std::path::Path;
 
 use lame::Lame;
 use minimp3::Decoder;
 use rubato::{InterpolationParameters, InterpolationType, Resampler, SincFixedIn, WindowFunction};
 
+use crate::beatmap::Beatmap;
 use crate::util;
 
 #[derive(Debug)]
@@ -25,8 +28,26 @@ impl From<lame::Error> for AudioStretchError {
 
 type Result<T> = result::Result<T, AudioStretchError>;
 
+// Stretches the audio associated with the given `map` by a factor of `rate`, updating metadata.
+pub fn stretch_beatmap_audio(map: &mut Beatmap, rate: f64) -> Result<()> {
+    let old_path = Path::new(&map.general_info.audio_file);
+    let old_audio = File::open(&old_path).or(Err(AudioStretchError::InvalidSource))?;
+
+    let new_filename = format!(
+        "{}_{}.{}",
+        old_path.file_stem().ok_or(AudioStretchError::InvalidSource)?.to_string_lossy(),
+        rate.to_string().replace('.', "_"),
+        old_path.extension().ok_or(AudioStretchError::InvalidSource)?.to_string_lossy(),
+    );
+    let mut new_audio = File::create(&new_filename).or(Err(AudioStretchError::DestinationIoError))?;
+    stretch(old_audio, &mut new_audio, rate)?;
+
+    map.general_info.audio_file = new_filename;
+    Ok(())
+}
+
 // Stretches MP3 audio read from `src` by a factor of `rate`, writing the output to `dest` as MP3 audio.
-pub fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<()> {
+fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<()> {
     // Decode source MP3 data into i16 PCM data.
     let mut decoder = Decoder::new(src);
     let mut frames = vec![];

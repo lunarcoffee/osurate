@@ -5,7 +5,7 @@
 #![feature(try_trait)]
 
 use std::fs::File;
-use std::io::BufReader;
+use std::io::{BufReader, Write};
 
 use crate::beatmap::Beatmap;
 
@@ -14,13 +14,12 @@ mod beatmap;
 mod util;
 
 fn main() {
-    // let mut src = vec![];
-    // File::open("resources/audio.mp3").unwrap().read_to_end(&mut src);
-    // let src = Cursor::new(src);
-    // let mut dest = File::create("resources/out.mp3").unwrap();
-    // println!("{:?}", audio::stretch(src, &mut dest, 1.2));
-
-    let map = File::open("resources/enigma.osu").unwrap();
+    let rate = 1.1;
+    let map = File::open("enigma.osu").unwrap();
     let reader = BufReader::new(map);
-    println!("{:?}", Beatmap::parse(reader));
+    let mut map = Beatmap::parse(reader).unwrap();
+    map.change_rate(rate);
+    audio::stretch_beatmap_audio(&mut map, rate);
+    let str = map.to_string();
+    File::create(format!("Toromaru - Enigma (Kawawa) [{}].osu", map.metadata.diff_name)).unwrap().write_all(str.as_bytes());
 }

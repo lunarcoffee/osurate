@@ -1,10 +1,10 @@
 use std::{io, result};
 use std::io::BufRead;
-use std::iter;
 use std::option::NoneError;
 use std::str::FromStr;
 
-use crate::beatmap::{Beatmap, Colors, DifficultyInfo, EditorInfo, Events, GeneralInfo, HitObject, HitObjectParams, Metadata, TimingPoint};
+use crate::beatmap::{Beatmap, Colors, DifficultyInfo, EditorInfo, Events, GeneralInfo, HitObject, HitObjectParams,
+                     Metadata, TimingPoint};
 use crate::util;
 use crate::util::verify;
 
@@ -81,7 +81,6 @@ impl<R: BufRead> Parser<R> {
 
     fn parse_general_info(&mut self) -> Result<(GeneralInfo, String)> {
         let mut audio_file = String::new();
-        let mut audio_lead_in = 0;
         let mut preview_time = -1;
         let mut rest = String::new();
 
@@ -91,7 +90,6 @@ impl<R: BufRead> Parser<R> {
             let value = value[1..].to_string(); // Trim off mandatory space.
             match key {
                 "AudioFilename" => audio_file = value,
-                "AudioLeadIn" => audio_lead_in = parse_ff(&value)?,
                 "PreviewTime" => preview_time = parse_ff(&value)?,
                 _ => rest += &(line + "\n"),
             }
@@ -100,7 +98,7 @@ impl<R: BufRead> Parser<R> {
 
         // Verify that required values were parsed.
         verify_ff(!audio_file.is_empty())?;
-        Ok((GeneralInfo { audio_file, audio_lead_in, preview_time, rest }, line))
+        Ok((GeneralInfo { audio_file, preview_time, rest }, line))
     }
 
     fn parse_metadata(&mut self) -> Result<(Metadata, String)> {
@@ -157,7 +155,7 @@ impl<R: BufRead> Parser<R> {
                 HitObjectParams::Spinner(parse_ff(split.next()?)?)
             } else if kind & (1 << 7) == 128 {
                 let end_time = split.clone().next()?.split_once(':')?.0;
-                HitObjectParams::Slider(parse_ff(end_time)?)
+                HitObjectParams::LongNote(parse_ff(end_time)?)
             } else {
                 return Err(ParseError::InvalidBeatmap);
             };
