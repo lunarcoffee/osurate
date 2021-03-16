@@ -39,7 +39,7 @@ impl<R: BufRead> Parser<R> {
     }
 
     pub fn parse(&mut self) -> Result<Beatmap> {
-        let header = self.read_line()?;
+        let header = trim_utf8_bom(self.read_line()?)?;
         verify_ff(header.starts_with("osu file format v"))?;
         util::verify(&header[17..] == "14", ParseError::UnsupportedVersion)?;
 
@@ -86,11 +86,10 @@ impl<R: BufRead> Parser<R> {
 
         let mut line = self.read_line()?;
         while !is_section_header_or_eof(&line) {
-            let (key, value) = line.split_once(":")?;
-            let value = value[1..].to_string(); // Trim off mandatory space.
+            let (key, value) = line.split_once(": ")?;
             match key {
-                "AudioFilename" => audio_file = value,
-                "PreviewTime" => preview_time = parse_ff(&value)?,
+                "AudioFilename" => audio_file = value.to_string(),
+                "PreviewTime" => preview_time = parse_ff(value)?,
                 _ => rest += &(line + "\n"),
             }
             line = self.read_line()?;
@@ -192,7 +191,7 @@ impl<R: BufRead> Parser<R> {
         }
 
         // Skip empty lines and comments.
-        if &buf[..] == "\n" || &buf[..] == "\r\n" || buf.starts_with("//") {
+        if buf.trim().is_empty() || buf.starts_with("//") {
             self.read_line()
         } else {
             Ok(buf.trim_end().to_string())
@@ -213,4 +212,13 @@ fn parse_ff<F: FromStr>(str: &str) -> Result<F> {
 // Checks if `line` is a section header (i.e. "[Metadata]") or was the result of reaching EOF.
 fn is_section_header_or_eof(line: &str) -> bool {
     line.chars().next() == Some('[') && line.chars().last() == Some(']') || line.is_empty()
+}
+
+// Trims the byte order mark from the start of a UTF-8 string, if present.
+fn trim_utf8_bom(line: String) -> Option<String> {
+    if line.as_bytes().starts_with(b"\xef\xbb\xbf") {
+        String::from_utf8(line.as_bytes()[3..].to_vec()).ok()
+    } else {
+        Some(line.to_string())
+    }
 }
