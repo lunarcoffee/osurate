@@ -27,18 +27,14 @@ impl Beatmap {
 
     // Changes the rate of the beatmap from 1.0 to `rate`. This does not change the audio nor the audio metadata.
     pub fn change_rate(&mut self, rate: f64) -> bool {
-        let transform = |n| (n as f64 / rate) as i32;
-        let transform_adj = |n| transform(n) + 90; // The stretched audio seems to have an ~90 ms delay.
+        // The stretched audio seems to have a ~30 ms delay.
+        let transform = |n| (n as f64 / rate) as i32 + 30;
 
         // Change relevant metadata.
-        self.general_info.preview_time = transform_adj(self.general_info.preview_time);
+        self.general_info.preview_time = transform(self.general_info.preview_time);
         self.metadata.diff_name += &format!(" ({}x)", rate);
 
-        // Adjust the first timing point to the delay.
-        self.timing_points[0].time = transform_adj(self.timing_points[0].time);
-        self.timing_points[0].beat_len /= rate;
-
-        for mut point in &mut self.timing_points[1..] {
+        for mut point in &mut self.timing_points {
             point.time = transform(point.time);
 
             // Only re-time uninherited timing points.
@@ -48,19 +44,18 @@ impl Beatmap {
         }
 
         for mut object in &mut self.hit_objects {
-            object.time = transform_adj(object.time);
+            object.time = transform(object.time);
 
             // Change the end times for relevant hit objects.
             match object.params {
-                HitObjectParams::Spinner(end_time) =>
-                    object.params = HitObjectParams::Spinner(transform_adj(end_time)),
+                HitObjectParams::Spinner(end_time) => object.params = HitObjectParams::Spinner(transform(end_time)),
                 HitObjectParams::LongNote(end_time) => {
                     // Small hack to make up for a lack of forethought in data storage.
                     let rest = match object.rest_parts[2].split_once(':') {
                         Some((_, rest)) => rest,
                         _ => return false,
                     };
-                    object.rest_parts[2] = transform_adj(end_time).to_string() + ":" + rest;
+                    object.rest_parts[2] = transform(end_time).to_string() + ":" + rest;
                 }
                 _ => {}
             }

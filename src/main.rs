@@ -30,11 +30,7 @@ fn main() {
     let map_paths = matches.values_of("inputs").unwrap();
     let rates = rate_matches.map(|r| r.parse::<f64>()).collect::<Result<Vec<_>, _>>()
         .unwrap_or_else(|_| util::log_fatal("invalid rate(s) specified"));
-
-    // TODO: fix; multiple resampling passes?
-    if rates.iter().any(|&r| r < 0.01 || r > 1.95) {
-        util::log_fatal("rates above 1.95x are not supported yet");
-    }
+    rates.iter().any(|&r| r < 0.01).then(|| util::log_fatal("negative rates are not supported"));
 
     util::log_info("starting");
     map_paths.map(|p| Path::new(p)).for_each(|p| generate_rates(p, &rates));
@@ -71,7 +67,6 @@ fn generate_rate(mut map: Beatmap, rate: f64, path: &Path) {
         AudioStretchError::SourceNotFound => "couldn't find mp3 file",
         AudioStretchError::InvalidSource => "couldn't parse mp3 file",
         AudioStretchError::UnsupportedChannelCount => "unsupported mp3 channel count",
-        AudioStretchError::ResampleError => "audio resampling error",
         AudioStretchError::LameInitializationError => "couldn't initialize lame (is it installed?)",
         AudioStretchError::LameEncodingError => "lame mp3 encoding error",
         _ => "mp3 output i/o error",
