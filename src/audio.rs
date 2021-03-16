@@ -112,12 +112,12 @@ fn resample_parallel(samples: (Vec<f32>, Vec<f32>), rate: f64, n_threads: usize)
 
 // Helper function to resample a chunk of PCM samples.
 fn resample_f32_to_i16(samples: [Vec<f32>; 2], rate: f64) -> Result<Vec<(i16, i16)>> {
-    // These are optimized heavily for speed over quality.
+    // These are optimized heavily for speed.
     let params = InterpolationParameters {
-        sinc_len: 64,
+        sinc_len: if rate < 1.55 { 64 } else if rate < 1.75 { 256 } else { 1_024 },
         f_cutoff: 0.95,
         interpolation: InterpolationType::Nearest,
-        oversampling_factor: 64,
+        oversampling_factor: 128,
         window: WindowFunction::Hann,
     };
 

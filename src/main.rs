@@ -19,7 +19,7 @@ mod util;
 
 fn main() {
     let matches = clap_app!(osurate =>
-        (version: "0.1.0")
+        (version: "0.1.1")
         (author: "LunarCoffee <lunarcoffee.pjc@gmail.com>")
         (about: "rate generator for osu! beatmaps")
         (@arg inputs: * #{1, u64::MAX} "Sets the input .osu file(s)")
@@ -31,9 +31,9 @@ fn main() {
     let rates = rate_matches.map(|r| r.parse::<f64>()).collect::<Result<Vec<_>, _>>()
         .unwrap_or_else(|_| util::log_fatal("invalid rate(s) specified"));
 
-    // TODO: fix; multiple resampling passes or parameter tuning maybe?
-    if rates.iter().any(|r| !(0.01..=1.5).contains(r)) {
-        util::log_fatal("rates above 1.5x are not supported yet");
+    // TODO: fix; multiple resampling passes?
+    if rates.iter().any(|&r| r < 0.01 || r > 1.95) {
+        util::log_fatal("rates above 1.95x are not supported yet");
     }
 
     util::log_info("starting");
