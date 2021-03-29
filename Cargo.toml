@@ -9,7 +9,7 @@ gui = ["druid"]
 
 [dependencies]
 clap = "2.33.3"
-dasp = { version = "0.11.0", features = ["signal", "interpolate", "interpolate-floor", "interpolate-linear"] }
+dasp = { version = "0.11.0", features = ["signal", "interpolate", "interpolate-linear"] }
 lame = "0.1.3"
 minimp3 = "0.5.1"
 

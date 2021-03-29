@@ -85,7 +85,7 @@ fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<()> {
     dest.write_all(&buf[..written]).or(Err(AudioStretchError::DestinationIoError))
 }
 
-// Resamples dual channel PCM `samples` by a factor of `rate` in parallel with `threads` worker threads.
+// Resamples dual channel PCM `samples` by a factor of `rate` in parallel with `n_threads` worker threads.
 fn resample_parallel(samples: Vec<i16>, rate: f64, n_threads: usize) -> (Vec<i16>, Vec<i16>) {
     // Split the samples into equally sized chunks and spawn a thread to process each.
     let n_chunks = (samples.len() as f64 / n_threads as f64).ceil() as usize;

@@ -1,7 +1,4 @@
 #![feature(available_concurrency)]
-#![feature(box_syntax)]
-#![feature(pub_macro_rules)]
-#![feature(slice_as_chunks)]
 #![feature(try_trait)]
 
 use std::fs::File;

@@ -14,7 +14,7 @@ use crate::util;
 
 pub fn run_gui() -> ! {
     let main_window = WindowDesc::new(make_ui).title("osurate | osu! Rate Generator").resizable(false);
-    let data = AppData { rates_str: Arc::new(String::new()), files: vec![], log: "Info: started\n".to_string() };
+    let data = AppData { rates_str: Arc::new(String::new()), files: vec![], log: "[Info] started\n".to_string() };
 
     AppLauncher::with_window(main_window)
         .delegate(Delegate {})
@@ -82,7 +82,7 @@ fn make_ui() -> impl Widget<AppData> {
             let rates = match rates_iter.collect::<Result<Vec<_>, _>>() {
                 Ok(r) if r.iter().all(|&r| r >= 0.01) => r,
                 _ => {
-                    data.log += "Error: invalid rate(s) specified\n";
+                    data.log += "[Error] invalid rate(s) specified\n";
                     return;
                 }
             };
@@ -90,8 +90,8 @@ fn make_ui() -> impl Widget<AppData> {
             // Unlike the CLI version, press on after encountering errors.
             for file in &data.files {
                 data.log += &match crate::generate_rates(file, &rates) {
-                    Err(e) => format!("Error: {}\n", e),
-                    Ok(map_name) => format!("Info: generated rate(s) for {}\n", map_name),
+                    Err(e) => format!("[Error] {}\n", e),
+                    Ok(map_name) => format!("[Info] generated rate(s) for {}\n", map_name),
                 };
             }
         })
