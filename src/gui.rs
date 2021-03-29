@@ -82,7 +82,7 @@ fn make_ui() -> impl Widget<AppData> {
             let rates = match rates_iter.collect::<Result<Vec<_>, _>>() {
                 Ok(r) if r.iter().all(|&r| r >= 0.01) => r,
                 _ => {
-                    data.log += "Error: rates below 0.01 are not supported";
+                    data.log += "Error: invalid rate(s) specified\n";
                     return;
                 }
             };
