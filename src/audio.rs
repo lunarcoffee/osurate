@@ -65,18 +65,19 @@ fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<()> {
     let channels = frames[0].channels;
     util::verify(channels <= 2, AudioStretchError::UnsupportedChannelCount)?;
     let sample_rate = frames[0].sample_rate;
+    let rate = rate * sample_rate as f64 / 44_100.;
     let bitrate = frames[0].bitrate;
 
     // Gather samples from each frame and resample.
     let samples = frames.into_iter().flat_map(|f| f.data).collect();
-    let concurrency = thread::available_concurrency().map(|n| n.get()).unwrap_or(2);
+    let mut concurrency = thread::available_concurrency().map(|n| n.get()).unwrap_or(2);
     let (samples_l, samples_r) = resample_parallel(samples, rate, concurrency);
 
     let mut lame = Lame::new().ok_or(AudioStretchError::LameInitializationError)?;
     lame.init_params()?;
     lame.set_sample_rate(sample_rate as u32)?;
     lame.set_quality(9)?;
-    lame.set_kilobitrate(bitrate.min(128))?;
+    lame.set_kilobitrate(bitrate.min(192))?;
 
     // Encode the stretched PCM data to MP3, writing it to `dest`.
     let mut buf = vec![0; samples_l.len()];

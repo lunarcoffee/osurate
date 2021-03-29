@@ -27,15 +27,17 @@ impl Beatmap {
 
     // Changes the rate of the beatmap from 1.0 to `rate`. This does not change the audio nor the audio metadata.
     pub fn change_rate(&mut self, rate: f64) -> bool {
-        // The stretched audio seems to have a ~30 ms delay.
-        let transform = |n| (n as f64 / rate) as i32 + 30;
+        // The stretched audio seems to have a ~75 ms delay.
+        let transform_f64 = |n| n / rate + 75.;
+        let transform = |n| transform_f64(n as f64) as i32;
 
         // Change relevant metadata.
-        self.general_info.preview_time = transform(self.general_info.preview_time);
+        let preview = self.general_info.preview_time;
+        self.general_info.preview_time = if preview >= 0 { transform(preview) } else { preview };
         self.metadata.diff_name += &format!(" ({}x)", rate);
 
         for mut point in &mut self.timing_points {
-            point.time = transform(point.time);
+            point.time = transform_f64(point.time);
 
             // Only re-time uninherited timing points.
             if point.beat_len.is_sign_positive() {
@@ -133,14 +135,16 @@ impl Events {
 
 #[derive(Clone, Debug)]
 pub struct TimingPoint {
-    pub time: i32,
+    // The spec on the wiki says `time` should be an integer, but some maps seem to violate that. `into_string` casts
+    // this to an i32, since fractional millisecond differences are probably negligible.
+    pub time: f64,
     pub beat_len: f64,
     rest: String,
 }
 
 impl TimingPoint {
     fn into_string(self) -> String {
-        format!("{},{},{}", self.time, self.beat_len, self.rest)
+        format!("{},{},{}", self.time as i32, self.beat_len, self.rest)
     }
 }
 

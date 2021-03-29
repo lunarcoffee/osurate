@@ -3,8 +3,10 @@ use std::io::BufRead;
 use std::option::NoneError;
 use std::str::FromStr;
 
-use crate::beatmap::{Beatmap, Colors, DifficultyInfo, EditorInfo, Events, GeneralInfo, HitObject, HitObjectParams,
-                     Metadata, TimingPoint};
+use crate::beatmap::{
+    Beatmap, Colors, DifficultyInfo, EditorInfo, Events, GeneralInfo, HitObject, HitObjectParams, Metadata,
+    TimingPoint,
+};
 use crate::util;
 use crate::util::verify;
 
