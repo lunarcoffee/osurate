@@ -1,21 +1,16 @@
 #![cfg(feature = "gui")]
 
-use std::fs::File;
-use std::io::{BufReader, Write};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
 
 use druid::{
-    AppDelegate, AppLauncher, Color, Command, commands, Data, DelegateCtx, Env, FileDialogOptions, FileInfo, FileSpec,
-    Handled, Lens, LocalizedString, PlatformError, Selector, Target, Widget, WidgetExt, WindowDesc,
+    AppDelegate, AppLauncher, Color, Command, commands, Data, DelegateCtx, Env, FileDialogOptions, FileSpec, Handled,
+    Lens, Target, Widget, WidgetExt, WindowDesc,
 };
-use druid::text::{BasicTextInput, Editor};
-use druid::widget::{Button, Flex, Label, LineBreaking, List, TextBox};
+use druid::widget::{Button, Flex, Label, LineBreaking, TextBox};
 
-use crate::{audio, util};
-use crate::audio::AudioStretchError;
-use crate::beatmap::{Beatmap, ParseError};
+use crate::util;
 
 pub fn run_gui() -> ! {
     let main_window = WindowDesc::new(make_ui).title("osurate | osu! Rate Generator").resizable(false);
@@ -65,7 +60,7 @@ fn make_ui() -> impl Widget<AppData> {
         .padding((8., 8., 8., 4.));
 
     let select_files_button = Button::new("Select Beatmap")
-        .on_click(|ctx, data, _| {
+        .on_click(|ctx, _, _| {
             // Opening multiple files is currently unsupported in Druid (#1067).
             let options = FileDialogOptions::new()
                 .title("Select a beatmap to generate rates for")
@@ -81,7 +76,7 @@ fn make_ui() -> impl Widget<AppData> {
     let clear_button = Button::new("Clear").on_click(|_, data: &mut AppData, _| data.files.clear()).padding(4.);
 
     let generate_button = Button::new("Generate")
-        .on_click(|ctx, data: &mut AppData, _| {
+        .on_click(|_, data: &mut AppData, _| {
             let rates_str = data.rates_str.to_string();
             let rates_iter = rates_str.split(",").map(|r| r.parse::<f64>());
             let rates = match rates_iter.collect::<Result<Vec<_>, _>>() {

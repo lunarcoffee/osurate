@@ -70,7 +70,7 @@ fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<()> {
 
     // Gather samples from each frame and resample.
     let samples = frames.into_iter().flat_map(|f| f.data).collect();
-    let mut concurrency = thread::available_concurrency().map(|n| n.get()).unwrap_or(2);
+    let concurrency = thread::available_concurrency().map(|n| n.get()).unwrap_or(2);
     let (samples_l, samples_r) = resample_parallel(samples, rate, concurrency);
 
     let mut lame = Lame::new().ok_or(AudioStretchError::LameInitializationError)?;
