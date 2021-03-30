@@ -77,7 +77,7 @@ fn stretch(src: impl Read, dest: &mut impl Write, rate: f64) -> Result<()> {
     lame.init_params()?;
     lame.set_sample_rate(sample_rate as u32)?;
     lame.set_quality(9)?;
-    lame.set_kilobitrate(bitrate.min(192))?;
+    lame.set_kilobitrate(bitrate.min(128))?;
 
     // Encode the stretched PCM data to MP3, writing it to `dest`.
     let mut buf = vec![0; samples_l.len()];

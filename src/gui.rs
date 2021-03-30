@@ -13,13 +13,13 @@ use druid::widget::{Button, Flex, Label, LineBreaking, TextBox};
 use crate::util;
 
 pub fn run_gui() -> ! {
-    let main_window = WindowDesc::new(make_ui).title("osurate | osu! Rate Generator").resizable(false);
-    let data = AppData { rates_str: Arc::new(String::new()), files: vec![], log: "[Info] started\n".to_string() };
+    let main_window = WindowDesc::new(make_ui)
+        .title("osurate | osu! Rate Generator")
+        .window_size((460., 380.))
+        .resizable(false);
 
-    AppLauncher::with_window(main_window)
-        .delegate(Delegate {})
-        .use_simple_logger()
-        .launch(data)
+    let data = AppData { rates_str: Arc::new(String::new()), files: vec![], status: "[Info] started".to_string() };
+    AppLauncher::with_window(main_window).delegate(Delegate {}).launch(data)
         .unwrap_or_else(|_| util::log_fatal("failed to start gui"));
     process::exit(0)
 }
@@ -28,12 +28,12 @@ pub fn run_gui() -> ! {
 struct AppData {
     rates_str: Arc<String>,
     files: Vec<PathBuf>,
-    log: String,
+    status: String,
 }
 
 impl Data for AppData {
     fn same(&self, other: &Self) -> bool {
-        self.rates_str == other.rates_str && self.files == other.files && self.log == other.log
+        self.rates_str == other.rates_str && self.files == other.files && self.status == other.status
     }
 }
 
@@ -57,7 +57,7 @@ fn make_ui() -> impl Widget<AppData> {
         .with_placeholder("Rates (i.e. 1.1,1.15,1.2)")
         .lens(AppData::rates_str)
         .expand_width()
-        .padding((8., 8., 8., 4.));
+        .padding((6., 7., 6., 2.));
 
     let select_files_button = Button::new("Select Beatmap")
         .on_click(|ctx, _, _| {
@@ -73,8 +73,12 @@ fn make_ui() -> impl Widget<AppData> {
     let undo_button = Button::new("Remove Last")
         .on_click(|_, data: &mut AppData, _| { let _ = data.files.pop(); })
         .padding(4.);
-    let clear_button = Button::new("Clear").on_click(|_, data: &mut AppData, _| data.files.clear()).padding(4.);
 
+    let clear_button = Button::new("Clear")
+        .on_click(|_, data: &mut AppData, _| data.files.clear())
+        .padding(4.);
+
+    // This blocks the UI thread when pressed, not a huge deal though.
     let generate_button = Button::new("Generate")
         .on_click(|_, data: &mut AppData, _| {
             let rates_str = data.rates_str.to_string();
@@ -82,45 +86,42 @@ fn make_ui() -> impl Widget<AppData> {
             let rates = match rates_iter.collect::<Result<Vec<_>, _>>() {
                 Ok(r) if r.iter().all(|&r| r >= 0.01) => r,
                 _ => {
-                    data.log += "[Error] invalid rate(s) specified\n";
+                    data.status = "[Error] invalid rate(s) specified".to_string();
                     return;
                 }
             };
 
             // Unlike the CLI version, press on after encountering errors.
             for file in &data.files {
-                data.log += &match crate::generate_rates(file, &rates) {
-                    Err(e) => format!("[Error] {}\n", e),
-                    Ok(map_name) => format!("[Info] generated rate(s) for {}\n", map_name),
+                data.status = match crate::generate_rates(file, &rates) {
+                    Err(e) => format!("[Error] {}", e),
+                    Ok(map_name) => format!("[Info] generated rate(s) for {}", map_name),
                 };
             }
         })
-        .padding(8.);
+        .padding(6.);
 
-    let selected_maps_label = Label::dynamic(
+    let configure_label = |l: Label<AppData>| l
+        .with_line_break_mode(LineBreaking::WordWrap)
+        .with_text_size(12.)
+        .background(Color::grey(0.12))
+        .border(Color::grey(0.12), 3.)
+        .rounded(4.)
+        .expand_width();
+
+    let selected_maps_label = configure_label(Label::dynamic(
         |data: &AppData, _| {
             let name = data.files.iter()
                 .map(|f| f.file_name().unwrap().to_string_lossy().trim_end_matches(".osu").to_string())
                 .collect::<Vec<_>>()
                 .join("\n");
             format!("Selected map(s):\n{}", if name.is_empty() { "(none)".to_string() } else { name })
-        })
-        .with_line_break_mode(LineBreaking::WordWrap)
-        .with_text_size(12.)
-        .background(Color::grey(0.12))
-        .rounded(4.)
-        .expand_width()
-        .height(153.)
-        .padding((8., 3., 8., 6.));
+        }))
+        .expand_height()
+        .padding((6., 1., 6., 6.));
 
-    let log_label = Label::dynamic(|data: &AppData, _| data.log.to_string())
-        .with_line_break_mode(LineBreaking::WordWrap)
-        .with_text_size(12.)
-        .background(Color::grey(0.12))
-        .rounded(4.)
-        .expand_width()
-        .height(153.)
-        .padding((8., 4.));
+    let status_label = configure_label(Label::dynamic(|data: &AppData, _| data.status.to_string()))
+        .padding((6., 2., 6., 6.));
 
     Flex::column()
         .with_child(rates_input)
@@ -129,7 +130,7 @@ fn make_ui() -> impl Widget<AppData> {
             .with_child(undo_button)
             .with_child(clear_button)
             .with_child(generate_button))
-        .with_child(selected_maps_label)
-        .with_child(log_label)
+        .with_flex_child(selected_maps_label, 1.)
+        .with_child(status_label)
         .background(Color::grey(0.05))
 }
