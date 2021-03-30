@@ -6,11 +6,16 @@ be scaled accordingly (and pitch-shifted).
 
 ## Building
 
+If you're on Windows, download the latest release (instructions
+included) [here](https://github.com/LunarCoffee/osurate/releases).
+
 Before building, make sure you have libmp3lame and nightly rustc (at least 1.50.0). If you want to build with GUI
 support on Linux, also have GTK+ 3 installed. To build, just clone [this repo](https://github.com/LunarCoffee/osurate)
 and compile with `cargo build --release`, and tack on `--features gui` if you want the GUI.
 
 ## Usage
+
+If you're on Windows, you can probably ignore this.
 
 ```shell
 osurate <inputs>... -r <rates>
