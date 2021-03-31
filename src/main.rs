@@ -58,7 +58,7 @@ fn main() {
 // used for user-facing logging.
 fn generate_rates(path: &PathBuf, rates: &[f64]) -> Result<String, String> {
     let path = path.canonicalize().map_err(|_| "couldn't find file")?;
-    let base_map_name = path.file_stem().ok_or_else(|| "couldn't find file").map(|s| s.to_string_lossy())?;
+    let base_map_name = path.file_stem().ok_or_else(|| "not a file").map(|s| s.to_string_lossy())?;
     let map_file = File::open(&path).map_err(|_| "couldn't open file")?;
     let reader = BufReader::new(map_file);
 
@@ -80,7 +80,6 @@ fn generate_rates(path: &PathBuf, rates: &[f64]) -> Result<String, String> {
 // Generates and saves the given rate for the given beatmap.
 fn generate_rate(mut map: Beatmap, rate: f64, path: &PathBuf) -> Result<(), String> {
     let parent_dir = path.parent().unwrap_or(Path::new("./"));
-    let old_diff_name = map.metadata.diff_name.to_string();
 
     map.change_rate(rate).then(|| {}).ok_or_else(|| "invalid beatmap file")?;
     audio::stretch_beatmap_audio(&mut map, parent_dir, rate).map_err(|e| match e {
@@ -92,9 +91,12 @@ fn generate_rate(mut map: Beatmap, rate: f64, path: &PathBuf) -> Result<(), Stri
         _ => "mp3 output i/o error",
     })?;
 
-    // Generate a new file name with the rate in the beatmap difficulty area.
-    let gen_path = parent_dir.join(path.to_string_lossy().replace(&old_diff_name, &*map.metadata.diff_name));
-    let mut gen_file = File::create(gen_path).map_err(|_| "couldn't create new beatmap rate file")?;
-    gen_file.write_all(map.into_string().as_bytes()).map_err(|_| "couldn't write new beatmap rate file")?;
+    // New file name with the rate in the difficulty name part.
+    let old_file_name = path.file_stem().unwrap().to_string_lossy();
+    let name_with_rate = format!("{} ({}x)].osu", &old_file_name[..old_file_name.len() - 1], rate);
+
+    let new_path = parent_dir.join(name_with_rate);
+    let mut new_file = File::create(new_path).map_err(|_| "couldn't create new beatmap file")?;
+    new_file.write_all(map.into_string().as_bytes()).map_err(|_| "couldn't write new beatmap file")?;
     Ok(())
 }
