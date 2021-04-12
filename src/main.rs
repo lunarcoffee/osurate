@@ -24,7 +24,7 @@ fn main() {
     }
     let gui_help = gui_help.as_str();
     let matches = clap_app!(osurate =>
-        (version: "0.2.0")
+        (version: "0.2.1")
         (author: "LunarCoffee <lunarcoffee.pjc@gmail.com>")
         (about: "rate generator for osu! beatmaps")
         (@arg gui: -g conflicts_with[inputs rates] required_unless[inputs] gui_help)
