@@ -22,7 +22,7 @@ osurate <inputs>... -r <rates>
 osurate "Wanderflux [Annihilation].osu" -r 0.85 0.9
 
 # This will generate 1.1x and 1.2x rates for both specified maps.
-osurate "MANIERA [Collab Another]" "Crystallized [listen]" -r 1.1 1.2
+osurate "MANIERA [Collab Another].osu" "Crystallized [listen].osu" -r 1.1 1.2
 
 # This opens the GUI.
 osurate -g
